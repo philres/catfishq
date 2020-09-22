@@ -1,0 +1,2 @@
+# catfishq
+Cat FASTQ files
