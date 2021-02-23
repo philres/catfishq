@@ -16,7 +16,7 @@ setup(
     description='Cat FASTQ files',
     zip_safe=False,
     install_requires=[
-        'tqdm'
+        'pysam'
     ],
     packages=find_packages(exclude=("tests",)),
     entry_points={
