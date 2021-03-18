@@ -87,7 +87,10 @@ def parse_args(argv):
     )
 
     parser.add_argument(
-        "-n", "--max_n", dest="MAX_N", type=int, default=0, help="Only output <int> reads"
+        "-n", "--max_n", dest="MAX_N", type=int, default=0, help="Stop after <max_n> reads"
+    )
+    parser.add_argument(
+        "-b", "--max_mbp", dest="MAX_BP", type=int, default=0, help="Stop after <max_bp> mega base pairs"
     )
     parser.add_argument(
         "-r",
@@ -188,7 +191,7 @@ def get_file_names(path, recursive):
     return filenames
 
 
-def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, recursive=False, dedup=False, seq_time=0, start_time=0):
+def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, recursive=False, dedup=False, seq_time=0, start_time=0):
     """
     Concatenate FASTQ files
 
@@ -204,6 +207,7 @@ def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, recursive=F
     read_ids = set()
 
     n = 0
+    n_bp = 0
     with open(out_filename, mode="w") as fout:
         for path in paths:
             filenames = get_file_names(path, recursive)
@@ -219,7 +223,8 @@ def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, recursive=F
                     if dedup:
                         read_ids.add(entry.name)
                     n += 1
-                    if max_n and n >= max_n:
+                    n_bp += len(entry.sequence)
+                    if max_n and n >= max_n or max_bp and n_bp > max_bp:
                         return
 
 
@@ -245,6 +250,7 @@ def main(argv=sys.argv[1:]):
         min_len=args.MIN_LEN,
         min_qscore=args.MIN_QSCORE,
         max_n=args.MAX_N,
+        max_bp=args.MAX_BP * 1000 * 1000,
         recursive=args.RECURSIVE,
         dedup=args.DEDUP,
         seq_time=args.SEQ_TIME,
