@@ -7,7 +7,7 @@ from setuptools import setup, find_packages
 
 os.environ['GIT_SSL_NO_VERIFY'] = 'true'
 
-__version__ = '1.1.0'
+__version__ = '1.1.1'
 
 setup(
     name='catfishq',
