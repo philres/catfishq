@@ -83,7 +83,11 @@ def parse_args(argv):
         "--sequencing-time", dest="SEQ_TIME", type=int, default=0, help="Only output reads that where sequenced during the given time (miniutes)."
     )
     parser.add_argument(
-        "--start-time", dest="START_TIME", type=str, default=None, help="Starttime of the run as guppy time stamp (only required with --sequencing-time)"
+        "--start-time", dest="START_TIME", type=str, default=None, help="Starttime of the run as guppy time stamp (only required with --sequencing-time). If 'min' is given as argument the minimal time is detected automatically."
+    )
+
+    parser.add_argument(
+        "--print-start-time", dest="PRINT_START_TIME", action="store_true", help="Print the minimal start_time of all fastq files"
     )
 
     parser.add_argument(
@@ -156,10 +160,24 @@ def check_seq_time(comment, max_start_time):
         return True
     matchObj = re.search( r'start_time=([^ ]+)', comment, re.M|re.I)
     start_str = matchObj.group(1)
-    start = datetime.fromisoformat(start_str.replace('Z', ''))
+    start = datetime.strptime(start_str,'%Y-%m-%dT%H:%M:%SZ')
     return start < max_start_time
 
+def compare_start_time(comment,min_start_time):
+    #Checks if a given min start time is smaller than the time of an entry
+    #The smaller time is returned
+    matchObj = re.search( r'start_time=([^ ]+)', comment, re.M|re.I)
+    start_time_str = matchObj.group(1)
+    start_time = datetime.strptime(start_time_str,'%Y-%m-%dT%H:%M:%SZ')
 
+    if(min_start_time==0):
+        return start_time
+    elif(min_start_time<=start_time):
+        return min_start_time
+    else:
+        return start_time
+            
+    
 def parse_fastqs(filename, min_len=0, min_qscore=0, max_start_time=None):
     with pysam.FastxFile(filename) as fh:
         for entry in fh:
@@ -190,6 +208,27 @@ def get_file_names(path, recursive):
 
     return filenames
 
+def get_min_start_time(paths,recursive=False):
+    """
+    Only print the start time.
+    This function automatically detects the minmal start_time of 
+    all the given fastq files
+            
+
+    :param paths: Input FASTQ files or folders containing FASTQ files
+    :return: min_start_time
+    """
+    start = None
+    max_start_time = None
+    min_start_time=0
+    for path in paths:
+        filenames = get_file_names(path,recursive)
+        for filename in filenames:
+            with pysam.FastxFile(filename) as fh:
+                for entry in fh:
+                    min_start_time=compare_start_time(entry.comment,min_start_time)
+    return min_start_time
+
 
 def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, recursive=False, dedup=False, seq_time=0, start_time=0):
     """
@@ -202,8 +241,15 @@ def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, r
     start = None
     max_start_time = None
     if start_time:
-        start = datetime.fromisoformat(start_time.replace('Z', ''))
-        max_start_time = start + timedelta(minutes=seq_time)
+        if not start_time=="min":
+            start = datetime.strptime(start_time,'%Y-%m-%dT%H:%M:%SZ')
+            max_start_time = start + timedelta(minutes=seq_time)
+        else:
+            #This option allows to automatically use the minmal start_time of 
+            #all the given fastq files as input for --start-time
+            min_start_time=get_min_start_time(paths,recursive)
+            max_start_time=min_start_time + timedelta(minutes=seq_time)
+            
     read_ids = set()
 
     n = 0
@@ -244,18 +290,22 @@ def main(argv=sys.argv[1:]):
         raise ValueError("Invalid log level: %s" % args.log.upper())
     logging.basicConfig(level=numeric_level, format="%(message)s")
 
-    format_fq(
-        args.FASTQ,
-        args.OUT,
-        min_len=args.MIN_LEN,
-        min_qscore=args.MIN_QSCORE,
-        max_n=args.MAX_N,
-        max_bp=args.MAX_BP * 1000 * 1000,
-        recursive=args.RECURSIVE,
-        dedup=args.DEDUP,
-        seq_time=args.SEQ_TIME,
-        start_time=args.START_TIME
-    )
+    if(args.PRINT_START_TIME):
+        min_start_time=get_min_start_time(args.FASTQ,args.RECURSIVE)
+        print(min_start_time.strftime('%Y-%m-%dT%H:%M:%SZ'))
+    else:
+        format_fq(
+            args.FASTQ,
+            args.OUT,
+            min_len=args.MIN_LEN,
+            min_qscore=args.MIN_QSCORE,
+            max_n=args.MAX_N,
+            max_bp=args.MAX_BP * 1000 * 1000,
+            recursive=args.RECURSIVE,
+            dedup=args.DEDUP,
+            seq_time=args.SEQ_TIME,
+            start_time=args.START_TIME
+        )
 
 
 if __name__ == "__main__":
