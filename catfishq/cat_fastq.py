@@ -10,6 +10,10 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 
+#from catfishq import __version__ #Don't know how I get this working
+
+__version__ = '1.1.4'
+
 
 LOOKUP = []
 
@@ -80,10 +84,10 @@ def parse_args(argv):
         "-q", "--min-qscore", dest="MIN_QSCORE", type=int, default=0, help="Minimum q-score"
     )
     parser.add_argument(
-        "--max-sequencing-time", dest="MAX_SEQ_TIME", type=int, default=0, help="Only output reads that where sequenced up to the given time (minutes)."
+        "--max-sequencing-time", dest="MAX_SEQ_TIME", type=int, default=None, help="Only output reads that where sequenced at or up to the given time (minutes)."
     )
     parser.add_argument(
-        "--min-sequencing-time", dest="MIN_SEQ_TIME", type=int, default=0, help="Only output reads that where sequenced after the given time (minutes)."
+        "--min-sequencing-time", dest="MIN_SEQ_TIME", type=int, default=None, help="Only output reads that where sequenced at or after the given time (minutes)."
     )
     parser.add_argument(
         "--start-time", dest="START_TIME", type=str, default=None, help="Starttime of the run as guppy time stamp (only required with --sequencing-time). If 'min' is given as argument the minimal time is detected automatically."
@@ -121,6 +125,15 @@ def parse_args(argv):
         type=str,
         help="FASTQ files or folders containing FASTQ files",
     )
+    
+    parser.add_argument(
+        "-v", 
+        '--version',
+        action='version',
+        version='catfish ' + __version__,
+        help="Print version",
+    )
+   
 
     args = parser.parse_args(argv)
 
@@ -264,15 +277,20 @@ def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, r
     if start_time:
         if not start_time=="min":
             start = datetime.strptime(start_time,'%Y-%m-%dT%H:%M:%SZ')
-            max_start_time = start + timedelta(minutes=min_seq_time)
-            min_start_time = start + timedelta(minutes=max_seq_time)
+
+            if(max_seq_time):
+                max_start_time = start + timedelta(minutes=max_seq_time)
+            if(min_seq_time):
+                min_start_time = start + timedelta(minutes=min_seq_time)
         else:
             #This option allows to automatically use the minmal start_time of 
             #all the given fastq files as input for --start-time
             auto_start_time=get_start_time(paths,recursive)
-            max_start_time=auto_start_time + timedelta(minutes=max_seq_time)
-            min_start_time=auto_start_time + timedelta(minutes=min_seq_time)
 
+            if(max_seq_time):
+                max_start_time = start + timedelta(minutes=max_seq_time)
+            if(min_seq_time):
+                min_start_time = start + timedelta(minutes=min_seq_time)
     read_ids = set()
 
     n = 0
