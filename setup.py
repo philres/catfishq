@@ -5,9 +5,9 @@ CatfishQ
 import os
 from setuptools import setup, find_packages
 
-os.environ['GIT_SSL_NO_VERIFY'] = 'true'
+from catfishq import __version__
 
-__version__ = '1.1.4'
+os.environ['GIT_SSL_NO_VERIFY'] = 'true'
 
 setup(
     name='catfishq',

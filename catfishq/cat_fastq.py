@@ -10,9 +10,8 @@ import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 
-#from catfishq import __version__ #Don't know how I get this working
+from . import __version__
 
-__version__ = '1.1.4'
 
 
 LOOKUP = []
@@ -94,6 +93,10 @@ def parse_args(argv):
     )
 
     parser.add_argument(
+        "--filter-id", dest="FILTER_ID", type=str, default=None, help="Only print reads with IDs present in file."
+    )
+
+    parser.add_argument(
         "--print-start-time", dest="PRINT_START_TIME", action="store_true", help="Print the minimal start_time of all fastq files"
     )
 
@@ -125,15 +128,15 @@ def parse_args(argv):
         type=str,
         help="FASTQ files or folders containing FASTQ files",
     )
-    
+
     parser.add_argument(
-        "-v", 
+        "-v",
         '--version',
         action='version',
         version='catfish ' + __version__,
         help="Print version",
     )
-   
+
 
     args = parser.parse_args(argv)
 
@@ -172,7 +175,7 @@ def find_file_in_folder(
 
 
 def check_seq_time(comment, max_start_time,min_start_time):
-    #This tests if the start time of the respective read is between 
+    #This tests if the start time of the respective read is between
     #max_sequencing_time and min_sequencing_time
     #If one of the times is not given the condition is automatically considered true
     if (max_start_time == None and min_start_time == None):
@@ -181,15 +184,15 @@ def check_seq_time(comment, max_start_time,min_start_time):
         matchObj = re.search( r'start_time=([^ ]+)', comment, re.M|re.I)
         start_str = matchObj.group(1)
         start = datetime.strptime(start_str,'%Y-%m-%dT%H:%M:%SZ')
-        
+
         bool_min=0
         bool_max=0
-        
+
         if (max_start_time == None or start<=max_start_time):
             bool_max=1
         if (min_start_time == None or start>=min_start_time):
             bool_min=1
-        
+
         if (bool_min == 1 and bool_max == 1):
             return True
         else:
@@ -208,8 +211,8 @@ def compare_start_time(comment,min_start_time):
         return min_start_time
     else:
         return start_time
-            
-    
+
+
 def parse_fastqs(filename, min_len=0, min_qscore=0, max_start_time=None, min_start_time=None):
     with pysam.FastxFile(filename) as fh:
         for entry in fh:
@@ -243,9 +246,9 @@ def get_file_names(path, recursive):
 def get_start_time(paths,recursive=False):
     """
     Only print the start time.
-    This function automatically detects the minmal start_time of 
+    This function automatically detects the minmal start_time of
     all the given fastq files
-            
+
 
     :param paths: Input FASTQ files or folders containing FASTQ files
     :return: min_start_time
@@ -262,7 +265,7 @@ def get_start_time(paths,recursive=False):
     return min_start_time
 
 
-def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, recursive=False, dedup=False, max_seq_time=0, min_seq_time=0, start_time=0):
+def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, recursive=False, dedup=False, max_seq_time=0, min_seq_time=0, start_time=0, filter_read_ids_file=None):
     """
     Concatenate FASTQ files
 
@@ -274,6 +277,16 @@ def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, r
     max_start_time = None
     min_start_time = None
 
+    keep_ids = None
+    if filter_read_ids_file:
+        keep_ids = set()
+        with open(filter_read_ids_file, "r") as fh:
+            for line in fh:
+                read_id = line.strip()
+                keep_ids.add(read_id)
+            logging.info("Found {} read ids.".format(len(keep_ids)))
+
+
     if start_time:
         if not start_time=="min":
             start = datetime.strptime(start_time,'%Y-%m-%dT%H:%M:%SZ')
@@ -283,7 +296,7 @@ def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, r
             if(min_seq_time):
                 min_start_time = start + timedelta(minutes=min_seq_time)
         else:
-            #This option allows to automatically use the minmal start_time of 
+            #This option allows to automatically use the minmal start_time of
             #all the given fastq files as input for --start-time
             auto_start_time=get_start_time(paths,recursive)
 
@@ -304,6 +317,9 @@ def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, r
                     filename, min_len=min_len, min_qscore=min_qscore, max_start_time=max_start_time, min_start_time=min_start_time
                 ):
                     if dedup and entry.name in read_ids:
+                        continue
+
+                    if keep_ids and entry.name not in keep_ids:
                         continue
 
                     fout.write(str(entry) + "\n")
@@ -346,7 +362,8 @@ def main(argv=sys.argv[1:]):
             dedup=args.DEDUP,
             max_seq_time=args.MAX_SEQ_TIME,
             min_seq_time=args.MIN_SEQ_TIME,
-            start_time=args.START_TIME
+            start_time=args.START_TIME,
+            filter_read_ids_file=args.FILTER_ID
         )
 
 
