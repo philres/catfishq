@@ -14,6 +14,7 @@ setup(
     version=__version__,
     author='philres',
     description='Cat FASTQ files',
+    license='MIT',
     zip_safe=False,
     install_requires=[
         'pysam'
