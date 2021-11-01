@@ -123,6 +123,14 @@ def parse_args(argv):
     )
 
     parser.add_argument(
+        "--comments",
+        choices=['forward', 'skip', 'wrap'],
+        default='wrap',
+        help="How to treat FASTQ header comments. "
+             "`forward` them 'as is', `wrap` them into 'CO:Z:xxx' tag, `skip` them in the output.",
+    )
+
+    parser.add_argument(
         "FASTQ",
         nargs="+",
         type=str,
@@ -213,7 +221,7 @@ def compare_start_time(comment,min_start_time):
         return start_time
 
 
-def parse_fastqs(filename, min_len=0, min_qscore=0, max_start_time=None, min_start_time=None):
+def parse_fastqs(filename, min_len=0, min_qscore=0, max_start_time=None, min_start_time=None, comments='wrap'):
     with pysam.FastxFile(filename) as fh:
         for entry in fh:
             if min_len and len(entry.sequence) < min_len:
@@ -225,9 +233,10 @@ def parse_fastqs(filename, min_len=0, min_qscore=0, max_start_time=None, min_sta
                 continue
             if not check_seq_time(entry.comment, max_start_time, min_start_time):
                 continue
-            if entry.comment:
+            if entry.comment and comments == 'wrap':
                 entry.comment = "CO:Z:{}".format(entry.comment)
-
+            elif comments == 'skip':
+                entry.comment = None
             yield entry
 
 
@@ -265,7 +274,7 @@ def get_start_time(paths,recursive=False):
     return min_start_time
 
 
-def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, recursive=False, dedup=False, max_seq_time=0, min_seq_time=0, start_time=0, filter_read_ids_file=None):
+def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, recursive=False, dedup=False, max_seq_time=0, min_seq_time=0, start_time=0, filter_read_ids_file=None, comments='wrap'):
     """
     Concatenate FASTQ files
 
@@ -314,7 +323,7 @@ def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, r
             logging.debug("Found {} files".format(len(filenames)))
             for filename in filenames:
                 for entry in parse_fastqs(
-                    filename, min_len=min_len, min_qscore=min_qscore, max_start_time=max_start_time, min_start_time=min_start_time
+                    filename, min_len=min_len, min_qscore=min_qscore, max_start_time=max_start_time, min_start_time=min_start_time, comments=comments
                 ):
                     if dedup and entry.name in read_ids:
                         continue
@@ -363,7 +372,8 @@ def main(argv=sys.argv[1:]):
             max_seq_time=args.MAX_SEQ_TIME,
             min_seq_time=args.MIN_SEQ_TIME,
             start_time=args.START_TIME,
-            filter_read_ids_file=args.FILTER_ID
+            filter_read_ids_file=args.FILTER_ID,
+            comments=args.comments,
         )
 
 
