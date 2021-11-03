@@ -182,6 +182,14 @@ def find_file_in_folder(
     return files
 
 
+def parse_timestamp(time_str):
+    try:
+        time_obj = datetime.strptime(time_str,'%Y-%m-%dT%H:%M:%SZ')
+    except ValueError:
+        time_obj = datetime.strptime(time_str,'%Y-%m-%dT%H:%M:%S.%f%z').replace(tzinfo=None)
+    return time_obj
+
+
 def check_seq_time(comment, max_start_time,min_start_time):
     #This tests if the start time of the respective read is between
     #max_sequencing_time and min_sequencing_time
@@ -191,7 +199,7 @@ def check_seq_time(comment, max_start_time,min_start_time):
     else:
         matchObj = re.search( r'start_time=([^ ]+)', comment, re.M|re.I)
         start_str = matchObj.group(1)
-        start = datetime.strptime(start_str,'%Y-%m-%dT%H:%M:%SZ')
+        start = parse_timestamp(start_str)
 
         bool_min=0
         bool_max=0
@@ -211,7 +219,7 @@ def compare_start_time(comment,min_start_time):
     #The smaller time is returned
     matchObj = re.search( r'start_time=([^ ]+)', comment, re.M|re.I)
     start_time_str = matchObj.group(1)
-    start_time = datetime.strptime(start_time_str,'%Y-%m-%dT%H:%M:%SZ')
+    start_time = parse_timestamp(start_time_str)
 
     if(min_start_time==0):
         return start_time
@@ -298,7 +306,7 @@ def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, r
 
     if start_time:
         if not start_time=="min":
-            start = datetime.strptime(start_time,'%Y-%m-%dT%H:%M:%SZ')
+            start = parse_timestamp(start_time)
 
             if(max_seq_time):
                 max_start_time = start + timedelta(minutes=max_seq_time)
