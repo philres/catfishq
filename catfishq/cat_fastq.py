@@ -307,7 +307,7 @@ def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, r
         else:
             #This option allows to automatically use the minmal start_time of
             #all the given fastq files as input for --start-time
-            auto_start_time=get_start_time(paths,recursive)
+            start=get_start_time(paths,recursive)
 
             if(max_seq_time):
                 max_start_time = start + timedelta(minutes=max_seq_time)
