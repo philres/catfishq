@@ -97,6 +97,14 @@ def parse_args(argv):
     )
 
     parser.add_argument(
+        "--filter-as", dest="FILTER_AS", type=str, default=None, help="Adaptive sampling CSV file created by guppy."
+    )
+
+    parser.add_argument(
+        "--filter-as-state", dest="FILTER_AS_STATE", default=None, action='append', choices=['unblock', 'unblock_hit_outside_bed', 'stop_receiving', 'no_decision'], help="Fiter reads by adaptiver sampling decision. (requires --filter-as)"
+    )
+
+    parser.add_argument(
         "--print-start-time", dest="PRINT_START_TIME", action="store_true", help="Print the minimal start_time of all fastq files"
     )
 
@@ -282,7 +290,7 @@ def get_start_time(paths,recursive=False):
     return min_start_time
 
 
-def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, recursive=False, dedup=False, max_seq_time=0, min_seq_time=0, start_time=0, filter_read_ids_file=None, comments='wrap'):
+def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, recursive=False, dedup=False, max_seq_time=0, min_seq_time=0, start_time=0, filter_read_ids_file=None, comments='wrap', filter_read_as_file=None, filter_read_as_decision=None):
     """
     Concatenate FASTQ files
 
@@ -303,6 +311,17 @@ def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, r
                 keep_ids.add(read_id)
             logging.info("Found {} read ids.".format(len(keep_ids)))
 
+    if filter_read_as_file and filter_read_as_decision:
+        if not keep_ids:
+            keep_ids = set()
+        with open(filter_read_as_file, "r") as fh:
+            for line in fh:
+                cols = line.strip().split(',')
+                read_id = cols[4]
+                read_decision = cols[6]
+                if read_decision in filter_read_as_decision:
+                    keep_ids.add(read_id)
+            logging.info("Found {} reads with {}.".format(len(keep_ids), filter_read_as_decision))
 
     if start_time:
         if not start_time=="min":
@@ -336,7 +355,7 @@ def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, r
                     if dedup and entry.name in read_ids:
                         continue
 
-                    if keep_ids and entry.name not in keep_ids:
+                    if keep_ids is not None and entry.name not in keep_ids:
                         continue
 
                     fout.write(str(entry) + "\n")
@@ -368,6 +387,11 @@ def main(argv=sys.argv[1:]):
         min_start_time=get_start_time(args.FASTQ,args.RECURSIVE)
         print(min_start_time.strftime('%Y-%m-%dT%H:%M:%SZ'))
     else:
+
+        if args.FILTER_AS and not args.FILTER_AS_STATE or not args.FILTER_AS and args.FILTER_AS_STATE:
+            logging.error("--filter-as-state and --filter-as must either be both specified or both skipped.")
+            return
+
         format_fq(
             args.FASTQ,
             args.OUT,
@@ -381,6 +405,8 @@ def main(argv=sys.argv[1:]):
             min_seq_time=args.MIN_SEQ_TIME,
             start_time=args.START_TIME,
             filter_read_ids_file=args.FILTER_ID,
+            filter_read_as_file=args.FILTER_AS,
+            filter_read_as_decision=args.FILTER_AS_STATE,
             comments=args.comments,
         )
 
