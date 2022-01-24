@@ -5,6 +5,8 @@ import logging
 import math
 import os
 import re
+from typing import List, Set, Optional
+
 import pysam
 import sys
 from pathlib import Path
@@ -18,6 +20,16 @@ LOOKUP = []
 
 for q in range(100):
     LOOKUP.append(pow(10, -0.1 * q))
+
+
+channel_regex_pattern = re.compile("(^|\s)ch=(?P<channel>\d+)")
+"""
+simple pattern for integer `channel` id in fastq comment section
+"""
+channel_range_regex_pattern = re.compile("^(?P<c1>\d+)(-(?P<c2>\d+))?$")
+"""
+patter for integer entry (`c1`) or range (`c1-c2`) 
+"""
 
 
 def _compute_mean_qscore(scores):
@@ -36,6 +48,36 @@ def _compute_mean_qscore(scores):
         sum_prob += LOOKUP[val]
     mean_prob = sum_prob / len(scores)
     return -10.0 * math.log10(mean_prob)
+
+
+def _parse_channels_input(channels_input: str) -> List[int]:
+    match = channel_range_regex_pattern.search(channels_input.strip())
+    if match is None:
+        raise ValueError(f"Channels input '{channels_input}' does not specify a[-b] single[range] integer pattern")
+    le = int(match.group('c1'))
+    he = le + 1
+    if match.group('c2') is not None:
+        he = int(match.group('c2')) + 1
+    if he <= le:
+        raise ValueError(f"Channels input '{channels_input}' clopen range has higher end '{he}' <= than lower end '{le}'")
+    return list(range(le, he))
+
+
+def get_channels_set(channels_input_list: List[str]) -> Set[int]:
+    result: Set[int] = set()
+    for entry in channels_input_list:
+        for channel in _parse_channels_input(channels_input=entry):
+            result.add(channel)
+    return result
+
+
+def get_channel_from_comment(comment: str) -> Optional[int]:
+    if not comment:
+        return None
+    match = channel_regex_pattern.search(comment)
+    if match is not None:
+        return int(match.group('channel'))
+    return None
 
 
 def parse_args(argv):
@@ -94,6 +136,12 @@ def parse_args(argv):
 
     parser.add_argument(
         "--filter-id", dest="FILTER_ID", type=str, default=None, help="Only print reads with IDs present in file."
+    )
+
+    parser.add_argument(
+        "--channels", dest="channels_input", type=str, nargs="*",
+        help="List of individual `a`/ranges `a-b` of integer channel ids to print reads from. "
+             "Ranges are inclusive on both sides. First `ch=\\d+` entry in header is considered.",
     )
 
     parser.add_argument(
@@ -237,7 +285,8 @@ def compare_start_time(comment,min_start_time):
         return start_time
 
 
-def parse_fastqs(filename, min_len=0, min_qscore=0, max_start_time=None, min_start_time=None, comments='wrap'):
+def parse_fastqs(filename, min_len=0, min_qscore=0, max_start_time=None, min_start_time=None, comments='wrap',
+                 channels: Optional[Set[int]] = None):
     with pysam.FastxFile(filename) as fh:
         for entry in fh:
             if min_len and len(entry.sequence) < min_len:
@@ -253,6 +302,8 @@ def parse_fastqs(filename, min_len=0, min_qscore=0, max_start_time=None, min_sta
                 entry.comment = "CO:Z:{}".format(entry.comment)
             elif comments == 'skip':
                 entry.comment = None
+            if channels is not None and get_channel_from_comment(entry.comment) not in channels:
+                continue
             yield entry
 
 
@@ -290,7 +341,9 @@ def get_start_time(paths,recursive=False):
     return min_start_time
 
 
-def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, recursive=False, dedup=False, max_seq_time=0, min_seq_time=0, start_time=0, filter_read_ids_file=None, comments='wrap', filter_read_as_file=None, filter_read_as_decision=None):
+def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, recursive=False, dedup=False,
+              max_seq_time=0, min_seq_time=0, start_time=0, filter_read_ids_file=None, comments='wrap',
+              filter_read_as_file=None, filter_read_as_decision=None, channels: Optional[Set[int]]=None):
     """
     Concatenate FASTQ files
 
@@ -350,7 +403,8 @@ def format_fq(paths, out_filename, min_len=0, min_qscore=0, max_n=0, max_bp=0, r
             logging.debug("Found {} files".format(len(filenames)))
             for filename in filenames:
                 for entry in parse_fastqs(
-                    filename, min_len=min_len, min_qscore=min_qscore, max_start_time=max_start_time, min_start_time=min_start_time, comments=comments
+                    filename, min_len=min_len, min_qscore=min_qscore, max_start_time=max_start_time,
+                    min_start_time=min_start_time, comments=comments, channels=channels,
                 ):
                     if dedup and entry.name in read_ids:
                         continue
@@ -392,6 +446,8 @@ def main(argv=sys.argv[1:]):
             logging.error("--filter-as-state and --filter-as must either be both specified or both skipped.")
             return
 
+        channels_set: Optional[Set[int]] = get_channels_set(args.channels_input) if args.channels_input else None
+
         format_fq(
             args.FASTQ,
             args.OUT,
@@ -408,6 +464,7 @@ def main(argv=sys.argv[1:]):
             filter_read_as_file=args.FILTER_AS,
             filter_read_as_decision=args.FILTER_AS_STATE,
             comments=args.comments,
+            channels=channels_set,
         )
 
 
