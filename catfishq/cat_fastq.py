@@ -253,9 +253,13 @@ def check_seq_time(comment, max_start_time,min_start_time):
     if (max_start_time == None and min_start_time == None):
         return True
     else:
-        matchObj = re.search( r'start_time=([^ ]+)', comment, re.M|re.I)
-        start_str = matchObj.group(1)
-        start = parse_timestamp(start_str)
+        try:
+            matchObj = re.search( r'start_time=([^ ]+)', comment, re.M|re.I)
+            start_time_str = matchObj.group(1)
+        except AttributeError:
+            matchObj = re.search( r'st:Z:([^ ]+)', comment, re.M|re.I)
+            start_time_str = matchObj.group(1)
+        start = parse_timestamp(start_time_str)
 
         bool_min=0
         bool_max=0
@@ -273,8 +277,12 @@ def check_seq_time(comment, max_start_time,min_start_time):
 def compare_start_time(comment,min_start_time):
     #Checks if a given min start time is smaller than the time of an entry
     #The smaller time is returned
-    matchObj = re.search( r'start_time=([^ ]+)', comment, re.M|re.I)
-    start_time_str = matchObj.group(1)
+    try:
+        matchObj = re.search( r'start_time=([^ ]+)', comment, re.M|re.I)
+        start_time_str = matchObj.group(1)
+    except AttributeError:
+        matchObj = re.search( r'st:Z:([^ ]+)', comment, re.M|re.I)
+        start_time_str = matchObj.group(1)
     start_time = parse_timestamp(start_time_str)
 
     if(min_start_time==0):
